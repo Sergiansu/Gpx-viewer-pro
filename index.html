@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>GPX Viewer iPhone</title>
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+      --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+      --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+      --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+      --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2rem);
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-5: 1.25rem;
+      --space-6: 1.5rem;
+      --space-8: 2rem;
+      --space-10: 2.5rem;
+      --space-12: 3rem;
+      --radius-sm: 0.375rem;
+      --radius-md: 0.75rem;
+      --radius-lg: 1rem;
+      --radius-full: 999px;
+      --color-bg: #08111f;
+      --color-surface: rgba(15, 23, 42, 0.9);
+      --color-surface-2: rgba(22, 32, 58, 0.95);
+      --color-border: rgba(255,255,255,0.12);
+      --color-text: #eef2ff;
+      --color-text-muted: #c7d2fe;
+      --color-primary: #38bdf8;
+      --shadow-lg: 0 18px 48px rgba(0,0,0,0.28);
+      --font-body: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: var(--font-body); background: var(--color-bg); color: var(--color-text); }
+    body { overflow: hidden; }
+    button, input { font: inherit; }
+
+    .app {
+      position: relative;
+      height: 100dvh;
+      width: 100%;
+      background: var(--color-bg);
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    .topbar {
+      position: absolute;
+      top: max(env(safe-area-inset-top), 0px);
+      left: 0;
+      right: 0;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-4);
+      pointer-events: none;
+    }
+
+    .brand, .top-actions {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: 44px;
+      padding: 0.7rem 0.95rem;
+      border-radius: var(--radius-full);
+      background: rgba(8, 17, 31, 0.76);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--color-border);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .logo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #67e8f9, #0ea5e9);
+    }
+
+    .title-wrap { display: flex; flex-direction: column; }
+    .title-wrap strong { font-size: var(--text-sm); }
+    .title-wrap span { font-size: var(--text-xs); color: var(--color-text-muted); }
+
+    .icon-btn {
+      width: 48px;
+      height: 48px;
+      border: 1px solid var(--color-border);
+      border-radius: 50%;
+      background: rgba(8, 17, 31, 0.76);
+      color: var(--color-text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow-lg);
+      cursor: pointer;
+    }
+
+    .drawer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      z-index: 600;
+      width: min(88vw, 360px);
+      height: 100dvh;
+      padding-top: calc(max(env(safe-area-inset-top), 0px) + 72px);
+      padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+      background: rgba(8, 17, 31, 0.96);
+      backdrop-filter: blur(18px);
+      border-left: 1px solid var(--color-border);
+      transform: translateX(100%);
+      transition: transform 220ms ease;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .drawer.open { transform: translateX(0); }
+    .drawer-header, .drawer-body { padding-inline: var(--space-4); }
+    .drawer-header { margin-bottom: var(--space-4); }
+    .drawer-body { overflow: auto; padding-bottom: var(--space-8); }
+    .drawer h2 { margin: 0 0 var(--space-2); font-size: var(--text-lg); }
+    .drawer p { margin: 0; color: var(--color-text-muted); font-size: var(--text-sm); line-height: 1.5; }
+
+    .upload-box {
+      display: grid;
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+      padding: var(--space-4);
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--color-border);
+    }
+
+    .upload-box input[type="file"] {
+      width: 100%;
+      color: var(--color-text-muted);
+    }
+
+    .action-btn {
+      min-height: 46px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, #0ea5e9, #0284c7);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0.8rem 1rem;
+    }
+
+    .ghost-btn {
+      min-height: 46px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.04);
+      color: var(--color-text);
+      cursor: pointer;
+      padding: 0.8rem 1rem;
+    }
+
+    .track-list {
+      display: grid;
+      gap: var(--space-3);
+      margin-top: var(--space-4);
+    }
+
+    .track-card {
+      display: grid;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,0.045);
+      border: 1px solid var(--color-border);
+    }
+
+    .track-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+
+    .track-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      min-width: 0;
+    }
+
+    .track-color {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      margin-top: 0.25rem;
+      border: 2px solid rgba(255,255,255,0.7);
+    }
+
+    .track-name { font-size: var(--text-sm); font-weight: 700; line-height: 1.35; }
+    .track-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+    .stat {
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .stat span { display: block; font-size: var(--text-xs); color: var(--color-text-muted); }
+    .stat strong { display: block; margin-top: 0.15rem; font-size: var(--text-sm); }
+
+    .track-actions {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .mini-btn {
+      min-height: 40px;
+      padding: 0.65rem 0.85rem;
+      border-radius: var(--radius-full);
+      border: 1px solid var(--color-border);
+      background: rgba(255,255,255,0.04);
+      color: var(--color-text);
+      cursor: pointer;
+    }
+
+    .mini-btn.active { background: rgba(56, 189, 248, 0.18); border-color: rgba(56, 189, 248, 0.42); }
+
+    .bottom-sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 450;
+      padding: 0 var(--space-4) calc(env(safe-area-inset-bottom) + 12px);
+      pointer-events: none;
+    }
+
+    .sheet-inner {
+      pointer-events: auto;
+      background: rgba(8, 17, 31, 0.92);
+      backdrop-filter: blur(18px);
+      border: 1px solid var(--color-border);
+      border-radius: 24px 24px 0 0;
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .sheet-handle {
+      width: 52px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.25);
+      margin: var(--space-3) auto;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--space-2);
+      padding: 0 var(--space-4) var(--space-4);
+    }
+
+    .summary-card {
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
+      min-height: 76px;
+    }
+
+    .summary-card span { display: block; font-size: var(--text-xs); color: var(--color-text-muted); }
+    .summary-card strong { display: block; margin-top: 0.3rem; font-size: var(--text-sm); }
+
+    .chart-wrap {
+      padding: 0 var(--space-4) var(--space-4);
+    }
+
+    #elevationChart {
+      width: 100%;
+      height: 180px;
+      display: block;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .sheet-foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-3);
+      padding: 0 var(--space-4) var(--space-4);
+      color: var(--color-text-muted);
+      font-size: var(--text-xs);
+    }
+
+    .status {
+      position: absolute;
+      left: var(--space-4);
+      bottom: calc(230px + env(safe-area-inset-bottom));
+      z-index: 470;
+      max-width: min(80vw, 340px);
+      padding: 0.8rem 1rem;
+      background: rgba(8, 17, 31, 0.78);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-full);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow-lg);
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+
+    .hidden { display: none !important; }
+
+    .leaflet-control-attribution {
+      font-size: 11px;
+      background: rgba(8,17,31,0.7) !important;
+      color: #cbd5e1 !important;
+    }
+
+    .leaflet-control-attribution a { color: #7dd3fc !important; }
+
+    @media (max-width: 640px) {
+      .summary { grid-template-columns: repeat(2, 1fr); }
+      .sheet-foot { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <a href="#main" class="hidden">Saltar al contenido</a>
+    <div id="map" aria-label="Mapa GPX"></div>
+
+    <header class="topbar">
+      <div class="brand chip" aria-label="Identidad de la app">
+        <span class="logo-dot" aria-hidden="true"></span>
+        <div class="title-wrap">
+          <strong>GPX Viewer</strong>
+          <span>Mapa + elevación + ubicación</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="locateBtn" class="icon-btn" aria-label="Activar ubicación" title="Activar ubicación">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v4"></path><path d="M12 18v4"></path><path d="M4.93 4.93l2.83 2.83"></path><path d="M16.24 16.24l2.83 2.83"></path><path d="M2 12h4"></path><path d="M18 12h4"></path><path d="M4.93 19.07l2.83-2.83"></path><path d="M16.24 7.76l2.83-2.83"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </button>
+        <button id="menuBtn" class="icon-btn" aria-label="Abrir lista de tracks" aria-expanded="false" title="Tracks">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+        </button>
+      </div>
+    </header>
+
+    <aside id="drawer" class="drawer" aria-label="Lista de tracks">
+      <div class="drawer-header">
+        <h2>Tracks</h2>
+        <p>Carga varios archivos GPX, cámbiales visibilidad y elige cuál quieres ver en el perfil de desnivel.</p>
+      </div>
+      <div class="drawer-body">
+        <section class="upload-box">
+          <label for="gpxInput"><strong>Añadir archivos GPX</strong></label>
+          <input id="gpxInput" type="file" accept=".gpx,application/gpx+xml,text/xml,application/xml" multiple />
+          <button id="clearBtn" class="ghost-btn" type="button">Quitar todos los tracks</button>
+        </section>
+        <div id="trackList" class="track-list" aria-live="polite"></div>
+      </div>
+    </aside>
+
+    <div id="statusBox" class="status">Carga uno o varios archivos GPX para empezar.</div>
+
+    <div class="bottom-sheet" id="main">
+      <section class="sheet-inner" aria-label="Resumen del track activo">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="summary">
+          <article class="summary-card"><span>Track activo</span><strong id="activeTrackName">Ninguno</strong></article>
+          <article class="summary-card"><span>Distancia</span><strong id="distanceValue">—</strong></article>
+          <article class="summary-card"><span>Desnivel +</span><strong id="gainValue">—</strong></article>
+          <article class="summary-card"><span>Desnivel -</span><strong id="lossValue">—</strong></article>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="elevationChart" width="1200" height="360" aria-label="Gráfico de elevación"></canvas>
+        </div>
+        <div class="sheet-foot">
+          <span id="chartHint">Selecciona un track para ver su perfil de desnivel.</span>
+          <span>Fondo topográfico activo · ideal para montaña y trekking.</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/2.1.2/gpx.min.js"></script>
+  <script>
+    const map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([45.4642, 9.19], 10);
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+    const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17,
+      attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap (CC-BY-SA)'
+    }).addTo(map);
+
+    const palette = ['#38bdf8','#f97316','#22c55e','#e879f9','#facc15','#fb7185','#34d399','#a78bfa','#60a5fa','#f43f5e'];
+    const tracks = [];
+    let activeTrackId = null;
+    let locationWatchId = null;
+    let userMarker = null;
+    let nearestMarker = null;
+    let hasFitBounds = false;
+
+    const menuBtn = document.getElementById('menuBtn');
+    const drawer = document.getElementById('drawer');
+    const gpxInput = document.getElementById('gpxInput');
+    const trackList = document.getElementById('trackList');
+    const clearBtn = document.getElementById('clearBtn');
+    const locateBtn = document.getElementById('locateBtn');
+    const statusBox = document.getElementById('statusBox');
+    const activeTrackName = document.getElementById('activeTrackName');
+    const distanceValue = document.getElementById('distanceValue');
+    const gainValue = document.getElementById('gainValue');
+    const lossValue = document.getElementById('lossValue');
+    const chartHint = document.getElementById('chartHint');
+    const chartCanvas = document.getElementById('elevationChart');
+    const ctx = chartCanvas.getContext('2d');
+
+    function setStatus(message) {
+      statusBox.textContent = message;
+    }
+
+    function formatDistance(m) {
+      if (!Number.isFinite(m)) return '—';
+      return m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m';
+    }
+
+    function formatElevation(m) {
+      if (!Number.isFinite(m)) return '—';
+      return Math.round(m) + ' m';
+    }
+
+    function toggleDrawer(force) {
+      const willOpen = typeof force === 'boolean' ? force : !drawer.classList.contains('open');
+      drawer.classList.toggle('open', willOpen);
+      menuBtn.setAttribute('aria-expanded', String(willOpen));
+    }
+
+    menuBtn.addEventListener('click', () => toggleDrawer());
+    document.addEventListener('click', (e) => {
+      if (!drawer.classList.contains('open')) return;
+      if (drawer.contains(e.target) || menuBtn.contains(e.target)) return;
+      toggleDrawer(false);
+    });
+
+    function getColor(index) {
+      return palette[index % palette.length];
+    }
+
+    function createObjectUrlFromFile(file) {
+      return URL.createObjectURL(file);
+    }
+
+    function drawPlaceholderChart(text = 'Sin datos de elevación') {
+      const { width, height } = chartCanvas;
+      ctx.clearRect(0, 0, width, height);
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, 'rgba(56,189,248,0.12)');
+      gradient.addColorStop(1, 'rgba(56,189,248,0.02)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = 'rgba(199,210,254,0.75)';
+      ctx.font = '600 28px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, width / 2, height / 2);
+    }
+
+    function drawElevationChart(track) {
+      if (!track || !track.elevationData || track.elevationData.length < 2) {
+        drawPlaceholderChart('Selecciona un track');
+        return;
+      }
+
+      const points = track.elevationData.filter(p => Number.isFinite(p.dist) && Number.isFinite(p.ele));
+      if (points.length < 2) {
+        drawPlaceholderChart('No hay perfil de elevación');
+        return;
+      }
+
+      const width = chartCanvas.width;
+      const height = chartCanvas.height;
+      const padding = { top: 28, right: 24, bottom: 42, left: 52 };
+      const plotW = width - padding.left - padding.right;
+      const plotH = height - padding.top - padding.bottom;
+      const minEle = Math.min(...points.map(p => p.ele));
+      const maxEle = Math.max(...points.map(p => p.ele));
+      const maxDist = Math.max(...points.map(p => p.dist));
+      const rangeEle = Math.max(maxEle - minEle, 1);
+      const rangeDist = Math.max(maxDist, 1);
+
+      ctx.clearRect(0, 0, width, height);
+      const bg = ctx.createLinearGradient(0, 0, 0, height);
+      bg.addColorStop(0, 'rgba(15,23,42,0.82)');
+      bg.addColorStop(1, 'rgba(2,6,23,0.96)');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      ctx.font = '500 20px Inter, sans-serif';
+      ctx.fillStyle = 'rgba(199,210,254,0.68)';
+
+      for (let i = 0; i <= 4; i++) {
+        const y = padding.top + (plotH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+        const val = Math.round(maxEle - (rangeEle / 4) * i);
+        ctx.fillText(val + ' m', 10, y + 6);
+      }
+
+      for (let i = 0; i <= 4; i++) {
+        const x = padding.left + (plotW / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top);
+        ctx.lineTo(x, height - padding.bottom);
+        ctx.stroke();
+        const val = ((rangeDist / 4) * i).toFixed(1) + ' km';
+        ctx.fillText(val, x - 18, height - 12);
+      }
+
+      ctx.beginPath();
+      points.forEach((p, idx) => {
+        const x = padding.left + (p.dist / rangeDist) * plotW;
+        const y = padding.top + ((maxEle - p.ele) / rangeEle) * plotH;
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+
+      const areaPath = new Path2D();
+      points.forEach((p, idx) => {
+        const x = padding.left + (p.dist / rangeDist) * plotW;
+        const y = padding.top + ((maxEle - p.ele) / rangeEle) * plotH;
+        if (idx === 0) areaPath.moveTo(x, y);
+        else areaPath.lineTo(x, y);
+      });
+      areaPath.lineTo(padding.left + plotW, height - padding.bottom);
+      areaPath.lineTo(padding.left, height - padding.bottom);
+      areaPath.closePath();
+
+      const fill = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
+      fill.addColorStop(0, hexToRgba(track.color, 0.45));
+      fill.addColorStop(1, hexToRgba(track.color, 0.06));
+      ctx.fillStyle = fill;
+      ctx.fill(areaPath);
+
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = track.color;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      ctx.fillStyle = '#eef2ff';
+      ctx.font = '700 24px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(track.name || 'Track', padding.left, 24);
+    }
+
+    function hexToRgba(hex, alpha) {
+      const clean = hex.replace('#', '');
+      const bigint = parseInt(clean, 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function updateSummary(track) {
+      if (!track) {
+        activeTrackName.textContent = 'Ninguno';
+        distanceValue.textContent = '—';
+        gainValue.textContent = '—';
+        lossValue.textContent = '—';
+        chartHint.textContent = 'Selecciona un track para ver su perfil de desnivel.';
+        drawPlaceholderChart('Selecciona un track');
+        return;
+      }
+      activeTrackName.textContent = track.name;
+      distanceValue.textContent = formatDistance(track.distance);
+      gainValue.textContent = formatElevation(track.gain);
+      lossValue.textContent = formatElevation(track.loss);
+      chartHint.textContent = 'Perfil del track activo y métricas principales.';
+      drawElevationChart(track);
+    }
+
+    function updateTrackList() {
+      trackList.innerHTML = '';
+      if (!tracks.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'Todavía no has cargado ningún GPX.';
+        empty.style.color = 'var(--color-text-muted)';
+        trackList.appendChild(empty);
+        updateSummary(null);
+        return;
+      }
+
+      tracks.forEach(track => {
+        const card = document.createElement('article');
+        card.className = 'track-card';
+
+        const top = document.createElement('div');
+        top.className = 'track-top';
+
+        const title = document.createElement('div');
+        title.className = 'track-title';
+        title.innerHTML = `
+          <span class="track-color" style="background:${track.color}"></span>
+          <div>
+            <div class="track-name">${escapeHtml(track.name)}</div>
+            <div style="font-size:var(--text-xs);color:var(--color-text-muted);margin-top:4px;">${track.visible ? 'Visible en mapa' : 'Oculto en mapa'}</div>
+          </div>
+        `;
+
+        const activePill = document.createElement('button');
+        activePill.className = 'mini-btn' + (track.id === activeTrackId ? ' active' : '');
+        activePill.type = 'button';
+        activePill.textContent = track.id === activeTrackId ? 'Activo' : 'Ver perfil';
+        activePill.addEventListener('click', () => setActiveTrack(track.id, true));
+
+        top.appendChild(title);
+        top.appendChild(activePill);
+
+        const meta = document.createElement('div');
+        meta.className = 'track-meta';
+        meta.innerHTML = `
+          <div class="stat"><span>Distancia</span><strong>${formatDistance(track.distance)}</strong></div>
+          <div class="stat"><span>Desnivel +</span><strong>${formatElevation(track.gain)}</strong></div>
+          <div class="stat"><span>Desnivel -</span><strong>${formatElevation(track.loss)}</strong></div>
+        `;
+
+        const actions = document.createElement('div');
+        actions.className = 'track-actions';
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'mini-btn';
+        toggleBtn.type = 'button';
+        toggleBtn.textContent = track.visible ? 'Ocultar' : 'Mostrar';
+        toggleBtn.addEventListener('click', () => toggleTrackVisibility(track.id));
+
+        const zoomBtn = document.createElement('button');
+        zoomBtn.className = 'mini-btn';
+        zoomBtn.type = 'button';
+        zoomBtn.textContent = 'Zoom';
+        zoomBtn.addEventListener('click', () => { if (track.layer) map.fitBounds(track.layer.getBounds(), { padding: [30,30] }); });
+
+        actions.appendChild(toggleBtn);
+        actions.appendChild(zoomBtn);
+
+        card.appendChild(top);
+        card.appendChild(meta);
+        card.appendChild(actions);
+        trackList.appendChild(card);
+      });
+    }
+
+    function toggleTrackVisibility(trackId) {
+      const track = tracks.find(t => t.id === trackId);
+      if (!track) return;
+      track.visible = !track.visible;
+      if (track.visible) track.layer.addTo(map);
+      else map.removeLayer(track.layer);
+      setStatus(track.visible ? `Track visible: ${track.name}` : `Track oculto: ${track.name}`);
+      updateTrackList();
+    }
+
+    function setActiveTrack(trackId, fit = false) {
+      const track = tracks.find(t => t.id === trackId);
+      if (!track) return;
+      activeTrackId = trackId;
+      updateSummary(track);
+      updateTrackList();
+      if (fit && track.layer) map.fitBounds(track.layer.getBounds(), { padding: [30, 30] });
+      setStatus(`Track activo: ${track.name}`);
+      updateNearestPointForCurrentLocation();
+    }
+
+    function parseElevationData(gpxLayer) {
+      const raw = gpxLayer.get_elevation_data ? gpxLayer.get_elevation_data() : [];
+      return raw
+        .map(item => ({ dist: Number(item[0]), ele: Number(item[1]), label: item[2] || '' }))
+        .filter(p => Number.isFinite(p.dist) && Number.isFinite(p.ele));
+    }
+
+    function extractLatLngs(layer) {
+      const latlngs = [];
+      function walk(value) {
+        if (!value) return;
+        if (Array.isArray(value)) {
+          value.forEach(walk);
+        } else if (typeof value.lat === 'number' && typeof value.lng === 'number') {
+          latlngs.push(value);
+        }
+      }
+      if (layer && typeof layer.getLatLngs === 'function') walk(layer.getLatLngs());
+      return latlngs;
+    }
+
+    function findPolylineLayer(gpxLayer) {
+      let found = null;
+      gpxLayer.eachLayer(layer => {
+        if (!found && layer instanceof L.Polyline) found = layer;
+      });
+      return found;
+    }
+
+    function loadFile(file, indexOffset = 0) {
+      const color = getColor(tracks.length + indexOffset);
+      const objectUrl = createObjectUrlFromFile(file);
+      setStatus(`Cargando ${file.name}...`);
+
+      const gpx = new L.GPX(objectUrl, {
+        async: true,
+        polyline_options: {
+          color,
+          opacity: 0.95,
+          weight: 5,
+          lineCap: 'round'
+        },
+        markers: {
+          startIcon: null,
+          endIcon: null,
+          wptIcons: { '': null }
+        }
+      }).on('loaded', (e) => {
+        const layer = e.target;
+        const polyline = findPolylineLayer(layer);
+        const latlngs = polyline ? extractLatLngs(polyline) : [];
+        const track = {
+          id: crypto.randomUUID(),
+          fileName: file.name,
+          name: layer.get_name ? (layer.get_name() || file.name.replace(/\.gpx$/i, '')) : file.name.replace(/\.gpx$/i, ''),
+          color,
+          layer,
+          polyline,
+          latlngs,
+          elevationData: parseElevationData(layer),
+          distance: layer.get_distance ? layer.get_distance() : NaN,
+          gain: layer.get_elevation_gain ? layer.get_elevation_gain() : NaN,
+          loss: layer.get_elevation_loss ? layer.get_elevation_loss() : NaN,
+          visible: true,
+          sourceUrl: objectUrl
+        };
+
+        tracks.push(track);
+        if (!hasFitBounds) {
+          map.fitBounds(layer.getBounds(), { padding: [28, 28] });
+          hasFitBounds = true;
+        } else {
+          const group = L.featureGroup(tracks.filter(t => t.visible).map(t => t.layer));
+          if (group.getLayers().length) map.fitBounds(group.getBounds(), { padding: [28, 28] });
+        }
+        if (!activeTrackId) activeTrackId = track.id;
+        updateTrackList();
+        updateSummary(tracks.find(t => t.id === activeTrackId));
+        setStatus(`Track cargado: ${track.name}`);
+      }).on('error', () => {
+        setStatus(`No se pudo cargar ${file.name}. Revisa que sea un GPX válido.`);
+      }).addTo(map);
+    }
+
+    gpxInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files || []).filter(f => /\.gpx$/i.test(f.name));
+      if (!files.length) {
+        setStatus('Selecciona uno o varios archivos con extensión .gpx');
+        return;
+      }
+      files.forEach((file, index) => loadFile(file, index));
+      e.target.value = '';
+      toggleDrawer(true);
+    });
+
+    clearBtn.addEventListener('click', () => {
+      tracks.forEach(track => {
+        if (track.layer) map.removeLayer(track.layer);
+        if (track.sourceUrl) URL.revokeObjectURL(track.sourceUrl);
+      });
+      tracks.length = 0;
+      activeTrackId = null;
+      hasFitBounds = false;
+      if (nearestMarker) { map.removeLayer(nearestMarker); nearestMarker = null; }
+      updateTrackList();
+      updateSummary(null);
+      setStatus('Todos los tracks se han eliminado.');
+    });
+
+    function getActiveTrack() {
+      return tracks.find(t => t.id === activeTrackId) || null;
+    }
+
+    function distanceSquared(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return dx * dx + dy * dy;
+    }
+
+    function projectPointOnSegment(p, a, b) {
+      const abx = b.x - a.x;
+      const aby = b.y - a.y;
+      const ab2 = abx * abx + aby * aby;
+      if (ab2 === 0) return { x: a.x, y: a.y, t: 0 };
+      const apx = p.x - a.x;
+      const apy = p.y - a.y;
+      let t = (apx * abx + apy * aby) / ab2;
+      t = Math.max(0, Math.min(1, t));
+      return { x: a.x + abx * t, y: a.y + aby * t, t };
+    }
+
+    function updateNearestPointForCurrentLocation() {
+      const track = getActiveTrack();
+      if (!track || !track.latlngs.length || !userMarker) return;
+      const userLatLng = userMarker.getLatLng();
+      const p = map.project(userLatLng, map.getZoom());
+      let best = null;
+
+      for (let i = 0; i < track.latlngs.length - 1; i++) {
+        const a = map.project(track.latlngs[i], map.getZoom());
+        const b = map.project(track.latlngs[i + 1], map.getZoom());
+        const proj = projectPointOnSegment(p, a, b);
+        const d2 = distanceSquared(p, proj);
+        if (!best || d2 < best.d2) best = { d2, proj };
+      }
+
+      if (!best) return;
+      const nearestLatLng = map.unproject(L.point(best.proj.x, best.proj.y), map.getZoom());
+      if (!nearestMarker) {
+        nearestMarker = L.circleMarker(nearestLatLng, {
+          radius: 7,
+          color: '#ffffff',
+          weight: 2,
+          fillColor: track.color,
+          fillOpacity: 1
+        }).addTo(map);
+      } else {
+        nearestMarker.setLatLng(nearestLatLng);
+        nearestMarker.setStyle({ fillColor: track.color });
+      }
+      const metersAway = map.distance(userLatLng, nearestLatLng);
+      setStatus(`Estás a ${Math.round(metersAway)} m del track activo: ${track.name}`);
+    }
+
+    function startLocation() {
+      if (!navigator.geolocation) {
+        setStatus('Tu navegador no soporta geolocalización.');
+        return;
+      }
+      if (locationWatchId !== null) {
+        navigator.geolocation.clearWatch(locationWatchId);
+        locationWatchId = null;
+      }
+      locationWatchId = navigator.geolocation.watchPosition((pos) => {
+        const latlng = [pos.coords.latitude, pos.coords.longitude];
+        if (!userMarker) {
+          userMarker = L.circleMarker(latlng, {
+            radius: 9,
+            color: '#ffffff',
+            weight: 3,
+            fillColor: '#2563eb',
+            fillOpacity: 0.95
+          }).addTo(map);
+        } else {
+          userMarker.setLatLng(latlng);
+        }
+        map.panTo(latlng, { animate: true });
+        updateNearestPointForCurrentLocation();
+      }, (err) => {
+        if (err.code === 1) setStatus('Permiso de ubicación denegado en Safari.');
+        else if (err.code === 2) setStatus('No se pudo obtener tu ubicación actual.');
+        else setStatus('La geolocalización tardó demasiado.');
+      }, {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 10000
+      });
+      setStatus('Buscando tu ubicación...');
+    }
+
+    locateBtn.addEventListener('click', startLocation);
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    drawPlaceholderChart('Carga un GPX');
+  </script>
+</body>
+</html>
